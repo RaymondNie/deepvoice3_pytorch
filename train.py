@@ -407,10 +407,10 @@ def eval_model(global_step, writer, device, model, checkpoint_dir, ismultispeake
             signal /= np.max(np.abs(signal))
 
             # Alignment
-            path = join(eval_output_dir, "step{:09d}_text{}_{}_alignment.png".format(
-                global_step, idx, speaker_str))
-            save_alignment(path, alignment)
-            tag = "eval_averaged_alignment_{}_{}".format(idx, speaker_str)
+            # path = join(eval_output_dir, "step{:09d}_text{}_{}_alignment.png".format(
+                # global_step, idx, speaker_str))
+            # save_alignment(path, alignment)
+            # tag = "eval_averaged_alignment_{}_{}".format(idx, speaker_str)
             # writer.add_image(tag, np.uint8(cm.viridis(np.flip(alignment, 1).T) * 255), global_step)
 
             # Mel
@@ -418,16 +418,16 @@ def eval_model(global_step, writer, device, model, checkpoint_dir, ismultispeake
             #                  prepare_spec_image(mel), global_step)
 
             # Audio
-            path = join(eval_output_dir, "step{:09d}_text{}_{}_predicted.wav".format(
-                global_step, idx, speaker_str))
-            audio.save_wav(signal, path)
+            # path = join(eval_output_dir, "step{:09d}_text{}_{}_predicted.wav".format(
+                # global_step, idx, speaker_str))
+            # audio.save_wav(signal, path)
 
-            try:
-                writer.add_audio("(Eval) Predicted audio signal {}_{}".format(idx, speaker_str),
-                                 signal, global_step, sample_rate=fs)
-            except Exception as e:
-                warn(str(e))
-                pass
+            # try:
+                # writer.add_audio("(Eval) Predicted audio signal {}_{}".format(idx, speaker_str),
+                                 # signal, global_step, sample_rate=fs)
+            # except Exception as e:
+                # warn(str(e))
+                # pass
 
 
 def save_states(global_step, writer, mel_outputs, linear_outputs, attn, mel, y,
@@ -706,9 +706,9 @@ Please set a larger value for ``max_position`` in hyper parameters.""".format(
                 loss += attn_loss
 
             if global_step > 0 and global_step % checkpoint_interval == 0:
-                save_states(
-                    global_step, writer, mel_outputs, linear_outputs, attn,
-                    mel, y, input_lengths, checkpoint_dir)
+                # save_states(
+                    # global_step, writer, mel_outputs, linear_outputs, attn,
+                    # mel, y, input_lengths, checkpoint_dir)
                 save_checkpoint(
                     model, optimizer, global_step, checkpoint_dir, global_epoch,
                     train_seq2seq, train_postnet)

@@ -108,7 +108,7 @@ hparams = hparam_tf.hparam.HParams(
     clip_thresh=0.1,
 
     # Save
-    checkpoint_interval=10000,
+    checkpoint_interval=1,
     eval_interval=10000,
     save_optimizer_state=True,
 
