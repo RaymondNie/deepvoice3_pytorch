@@ -418,16 +418,16 @@ def eval_model(global_step, writer, device, model, checkpoint_dir, ismultispeake
             #                  prepare_spec_image(mel), global_step)
 
             # Audio
-            # path = join(eval_output_dir, "step{:09d}_text{}_{}_predicted.wav".format(
-                # global_step, idx, speaker_str))
-            # audio.save_wav(signal, path)
+            path = join(eval_output_dir, "step{:09d}_text{}_{}_predicted.wav".format(
+                global_step, idx, speaker_str))
+            audio.save_wav(signal, path)
 
-            # try:
-                # writer.add_audio("(Eval) Predicted audio signal {}_{}".format(idx, speaker_str),
-                                 # signal, global_step, sample_rate=fs)
-            # except Exception as e:
-                # warn(str(e))
-                # pass
+            try:
+                writer.add_audio("(Eval) Predicted audio signal {}_{}".format(idx, speaker_str),
+                                 signal, global_step, sample_rate=fs)
+            except Exception as e:
+                warn(str(e))
+                pass
 
 
 def save_states(global_step, writer, mel_outputs, linear_outputs, attn, mel, y,
