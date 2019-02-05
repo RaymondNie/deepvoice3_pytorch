@@ -706,9 +706,9 @@ Please set a larger value for ``max_position`` in hyper parameters.""".format(
                 loss += attn_loss
 
             if global_step > 0 and global_step % checkpoint_interval == 0:
-                # save_states(
-                    # global_step, writer, mel_outputs, linear_outputs, attn,
-                    # mel, y, input_lengths, checkpoint_dir)
+                save_states(
+                    global_step, writer, mel_outputs, linear_outputs, attn,
+                    mel, y, input_lengths, checkpoint_dir)
                 save_checkpoint(
                     model, optimizer, global_step, checkpoint_dir, global_epoch,
                     train_seq2seq, train_postnet)
