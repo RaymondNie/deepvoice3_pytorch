@@ -181,7 +181,7 @@ class Decoder(nn.Module):
                  in_dim=80, r=5,
                  max_positions=512, padding_idx=None,
                  preattention=((128, 5, 1),) * 4,
-                 convolutions=((128, 5, 1),) * 4,
+                 convolutions=((128, 5, 1),) * 8,
                  attention=True, dropout=0.1,
                  use_memory_mask=False,
                  force_monotonic_attention=False,
@@ -500,7 +500,7 @@ def _clear_modules(modules):
 
 class Converter(nn.Module):
     def __init__(self, n_speakers, speaker_embed_dim,
-                 in_dim, out_dim, convolutions=((256, 5, 1),) * 4,
+                 in_dim, out_dim, convolutions=((256, 5, 1),) * 8,
                  time_upsampling=1,
                  dropout=0.1):
         super(Converter, self).__init__()
