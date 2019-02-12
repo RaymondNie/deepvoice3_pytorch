@@ -934,9 +934,10 @@ if __name__ == "__main__":
         collate_fn=collate_fn, pin_memory=hparams.pin_memory)
 
     device = torch.device("cuda" if use_cuda else "cpu")
-
+    
     # Model
     model = build_model().to(device)
+
 
     optimizer = optim.Adam(model.get_trainable_parameters(),
                            lr=hparams.initial_learning_rate, betas=(

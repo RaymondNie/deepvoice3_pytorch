@@ -13,6 +13,7 @@ options:
     --max-decoder-steps=<N>           Max decoder steps [default: 500].
     --replace_pronunciation_prob=<N>  Prob [default: 0.0].
     --speaker_id=<id>                 Speaker ID (for multi-speaker model).
+    --max_speaker_id=<max_id>         Will create audio samples for speaker ids from 0 to max_id
     --output-html                     Output html for blog post.
     -h, --help               Show help message.
 """
@@ -97,6 +98,10 @@ if __name__ == "__main__":
     speaker_id = args["--speaker_id"]
     if speaker_id is not None:
         speaker_id = int(speaker_id)
+    max_speaker_id = args["--max_speaker_id"]
+    if max_speaker_id is not None:
+        max_speaker_id = int(max_speaker_id)
+
     preset = args["--preset"]
 
     # Load preset if specified
@@ -133,36 +138,69 @@ if __name__ == "__main__":
     with open(text_list_file_path, "rb") as f:
         lines = f.readlines()
         for idx, line in enumerate(lines):
-            text = line.decode("utf-8")[:-1]
-            words = nltk.word_tokenize(text)
-            waveform, alignment, _, _ = tts(
-                model, text, p=replace_pronunciation_prob, speaker_id=speaker_id, fast=True)
-            dst_wav_path = join(dst_dir, "{}_{}{}.wav".format(
-                idx, checkpoint_name, file_name_suffix))
-            dst_alignment_path = join(
-                dst_dir, "{}_{}{}_alignment.png".format(idx, checkpoint_name,
-                                                        file_name_suffix))
-            plot_alignment(alignment.T, dst_alignment_path,
-                           info="{}, {}".format(hparams.builder, basename(checkpoint_path)))
-            audio.save_wav(waveform, dst_wav_path)
-            name = splitext(basename(text_list_file_path))[0]
-            if output_html:
-                print("""
-{}
+            if max_speaker_id != None:
+                for cur_id in range(max_speaker_id):
+                    text = line.decode("utf-8")[:-1]
+                    words = nltk.word_tokenize(text)
+                    waveform, alignment, _, _ = tts(
+                        model, text, p=replace_pronunciation_prob, speaker_id=cur_id, fast=True)
+                    dst_wav_path = join(dst_dir, "{}_{}{}_speaker_id_{}_.wav".format(
+                        idx, checkpoint_name, file_name_suffix, cur_id))
+                    dst_alignment_path = join(
+                        dst_dir, "{}_{}{}_speaker_id_{}_alignment.png".format(idx, checkpoint_name,
+                                                                file_name_suffix, cur_id))
+                    plot_alignment(alignment.T, dst_alignment_path,
+                                   info="{}, {}".format(hparams.builder, basename(checkpoint_path)))
+                    audio.save_wav(waveform, dst_wav_path)
+                    name = splitext(basename(text_list_file_path))[0]
+                    if output_html:
+                        print("""
+        {}
 
-({} chars, {} words)
+        ({} chars, {} words)
 
-<audio controls="controls" >
-<source src="/audio/{}/{}/{}" autoplay/>
-Your browser does not support the audio element.
-</audio>
+        <audio controls="controls" >
+        <source src="/audio/{}/{}/{}" autoplay/>
+        Your browser does not support the audio element.
+        </audio>
 
-<div align="center"><img src="/audio/{}/{}/{}" /></div>
-                  """.format(text, len(text), len(words),
-                             hparams.builder, name, basename(dst_wav_path),
-                             hparams.builder, name, basename(dst_alignment_path)))
+        <div align="center"><img src="/audio/{}/{}/{}" /></div>
+                          """.format(text, len(text), len(words),
+                                     hparams.builder, name, basename(dst_wav_path),
+                                     hparams.builder, name, basename(dst_alignment_path)))
+                    else:
+                        print(idx, ": {}\n ({} chars, {} words)".format(text, len(text), len(words)))
             else:
-                print(idx, ": {}\n ({} chars, {} words)".format(text, len(text), len(words)))
+                text = line.decode("utf-8")[:-1]
+                words = nltk.word_tokenize(text)
+                waveform, alignment, _, _ = tts(
+                    model, text, p=replace_pronunciation_prob, speaker_id=speaker_id, fast=True)
+                dst_wav_path = join(dst_dir, "{}_{}{}.wav".format(
+                    idx, checkpoint_name, file_name_suffix))
+                dst_alignment_path = join(
+                    dst_dir, "{}_{}{}_alignment.png".format(idx, checkpoint_name,
+                                                            file_name_suffix))
+                plot_alignment(alignment.T, dst_alignment_path,
+                               info="{}, {}".format(hparams.builder, basename(checkpoint_path)))
+                audio.save_wav(waveform, dst_wav_path)
+                name = splitext(basename(text_list_file_path))[0]
+                if output_html:
+                    print("""
+    {}
+
+    ({} chars, {} words)
+
+    <audio controls="controls" >
+    <source src="/audio/{}/{}/{}" autoplay/>
+    Your browser does not support the audio element.
+    </audio>
+
+    <div align="center"><img src="/audio/{}/{}/{}" /></div>
+                      """.format(text, len(text), len(words),
+                                 hparams.builder, name, basename(dst_wav_path),
+                                 hparams.builder, name, basename(dst_alignment_path)))
+                else:
+                    print(idx, ": {}\n ({} chars, {} words)".format(text, len(text), len(words)))
 
     print("Finished! Check out {} for generated audio samples.".format(dst_dir))
     sys.exit(0)
