@@ -782,7 +782,7 @@ def build_model():
         n_vocab=_frontend.n_vocab,
         embed_dim=hparams.text_embed_dim,
         mel_dim=hparams.num_mels,
-        linear_dim=hparams.fft_size // 2 + 1,
+        linear_dim=64,
         r=hparams.outputs_per_step,
         downsample_step=hparams.downsample_step,
         padding_idx=hparams.padding_idx,

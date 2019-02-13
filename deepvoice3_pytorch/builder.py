@@ -169,7 +169,7 @@ def nyanko(n_vocab, embed_dim=128, mel_dim=80, linear_dim=513, r=1,
     return model
 
 
-def deepvoice3_multispeaker(n_vocab, embed_dim=256, mel_dim=80, linear_dim=513, r=4,
+def deepvoice3_multispeaker(n_vocab, embed_dim=256, mel_dim=80, linear_dim=64, r=4,
                             downsample_step=1,
                             n_speakers=1, speaker_embed_dim=16, padding_idx=0,
                             dropout=(1 - 0.95), kernel_size=5,

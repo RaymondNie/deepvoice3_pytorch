@@ -200,10 +200,8 @@ def _process_utterance(out_dir, text, wav_path, speaker_id=None):
     # Compute the linear-scale spectrogram from the wav:
     spectrogram = audio.spectrogram(wav).astype(np.float32)
     n_frames = spectrogram.shape[1]
-
     # Compute a mel-scale spectrogram from the wav:
     mel_spectrogram = audio.melspectrogram(wav).astype(np.float32)
-
     # Write the spectrograms to disk: 
     # Get filename from wav_path
     wav_name = os.path.basename(wav_path)
@@ -216,6 +214,9 @@ def _process_utterance(out_dir, text, wav_path, speaker_id=None):
     np.save(os.path.join(out_dir, spectrogram_filename), spectrogram.T, allow_pickle=False)
     np.save(os.path.join(out_dir, mel_filename), mel_spectrogram.T, allow_pickle=False)
     # Return a tuple describing this training example:
+    print(spectrogram.T.shape)
+    print(mel_spectrogram.T.shape)
+    print(spectrogram_filename, mel_filename, n_frames, text, speaker_id)
     return (spectrogram_filename, mel_filename, n_frames, text, speaker_id)
     
 def _process_utterance_single(out_dir, text, wav_path):
@@ -251,7 +252,6 @@ def _process_utterance_single(out_dir, text, wav_path):
 
     # Compute a mel-scale spectrogram from the wav:
     mel_spectrogram = audio.melspectrogram(wav).astype(np.float32)
-
     # Write the spectrograms to disk: 
     # Get filename from wav_path
     wav_name = os.path.basename(wav_path)
@@ -286,7 +286,6 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
         highfreq=sample_freq/2,
         preemph=0.97
     )
-
     # Getting linear spectrograms
     frames = psf.sigproc.framesig(sig=signal,
                                   frame_len=320,
@@ -294,6 +293,7 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
                                   winfunc=np.hanning)
     # sample_freq * hparams.fft_size
     features = psf.sigproc.logpowspec(frames, NFFT=320)
+    features = features[:, :hparams.num_mels]
 
     n_frames = features.shape[0]
 
