@@ -274,6 +274,9 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
     if hparams.rescaling:
         signal = signal / np.abs(signal).max() * hparams.rescaling_max
 
+    if jasper.normalize:
+        signal = (normalize_signal(signal.astype(np.float32) * 32767.0).astype(np.int16)
+            
     # Get mel spectrograms
     mel_features = psf.logfbank(
         signal=signal,
@@ -293,7 +296,7 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
                                   winfunc=np.hanning)
     # sample_freq * hparams.fft_size
     features = psf.sigproc.logpowspec(frames, NFFT=320)
-    features = features[:, :hparams.num_mels]
+    # features = features[:, :hparams.num_mels]
 
     n_frames = features.shape[0]
 
@@ -311,3 +314,5 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
 
     return (spectrogram_filename, mel_filename, n_frames, text, speaker_id)
 
+def normalize_signal(signal):
+    return signal / np.max(np.abs(signal))

@@ -14,6 +14,7 @@ options:
     --replace_pronunciation_prob=<N>  Prob [default: 0.0].
     --speaker_id=<id>                 Speaker ID (for multi-speaker model).
     --max_speaker_id=<max_id>         Will create audio samples for speaker ids from 0 to max_id
+    --speakers_per_utterance=<int>    How many speakers per utterance
     --output-html                     Output html for blog post.
     -h, --help               Show help message.
 """
@@ -27,18 +28,19 @@ import audio
 
 import torch
 import numpy as np
+import pandas as pd
 import nltk
+import random
 
 # The deepvoice3 model
 from deepvoice3_pytorch import frontend
 from hparams import hparams, hparams_debug_string
-
+from train import guided_attention
 from tqdm import tqdm
 
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
 _frontend = None  # to be set later
-
 
 def tts(model, text, p=0, speaker_id=None, fast=False):
     """Convert text to speech waveform given a deepvoice3 model.
@@ -101,7 +103,7 @@ if __name__ == "__main__":
     max_speaker_id = args["--max_speaker_id"]
     if max_speaker_id is not None:
         max_speaker_id = int(max_speaker_id)
-
+    speakers_per_utterance = int(args["--speakers_per_utterance"])
     preset = args["--preset"]
 
     # Load preset if specified
@@ -135,72 +137,40 @@ if __name__ == "__main__":
     model.seq2seq.decoder.max_decoder_steps = max_decoder_steps
 
     os.makedirs(dst_dir, exist_ok=True)
+    metadata = []
+
     with open(text_list_file_path, "rb") as f:
         lines = f.readlines()
         for idx, line in enumerate(lines):
-            if max_speaker_id != None:
-                for cur_id in range(max_speaker_id):
-                    text = line.decode("utf-8")[:-1]
-                    words = nltk.word_tokenize(text)
-                    waveform, alignment, _, _ = tts(
-                        model, text, p=replace_pronunciation_prob, speaker_id=cur_id, fast=True)
+            generated_speech_count = 0
+            sample_audio = [] # Get 10 audio samples 
+            while generated_speech_count < speakers_per_utterance:
+                # Generate a random speaker_id and try to generate audio
+                rand_speaker_id = random.randint(0,max_speaker_id)
+                text = line.decode("utf-8")[:-1]
+                words = nltk.word_tokenize(text)
+                waveform, alignment, _, _ = tts(
+                    model, text, p=replace_pronunciation_prob, speaker_id=rand_speaker_id, fast=True)
+                soft_mask = guided_attention(alignment.shape[0], alignment.shape[0], alignment.shape[1], alignment.shape[1], 0.2)
+                attn_loss = (alignment * soft_mask).mean()
+                # Filter out poorly generated audio
+                if attn_loss < 0.00025:
+                    print("{}_{}{}_speaker_id_{}_.wav, {}".format(
+                        idx, checkpoint_name, file_name_suffix, rand_speaker_id, attn_loss))
+                    generated_speech_count += 1
+
                     dst_wav_path = join(dst_dir, "{}_{}{}_speaker_id_{}_.wav".format(
-                        idx, checkpoint_name, file_name_suffix, cur_id))
+                        idx, checkpoint_name, file_name_suffix, rand_speaker_id))
                     dst_alignment_path = join(
                         dst_dir, "{}_{}{}_speaker_id_{}_alignment.png".format(idx, checkpoint_name,
-                                                                file_name_suffix, cur_id))
+                                                                file_name_suffix, rand_speaker_id))
+                    metadata.append([dst_wav_path, text])
                     plot_alignment(alignment.T, dst_alignment_path,
                                    info="{}, {}".format(hparams.builder, basename(checkpoint_path)))
                     audio.save_wav(waveform, dst_wav_path)
                     name = splitext(basename(text_list_file_path))[0]
-                    if output_html:
-                        print("""
-        {}
 
-        ({} chars, {} words)
-
-        <audio controls="controls" >
-        <source src="/audio/{}/{}/{}" autoplay/>
-        Your browser does not support the audio element.
-        </audio>
-
-        <div align="center"><img src="/audio/{}/{}/{}" /></div>
-                          """.format(text, len(text), len(words),
-                                     hparams.builder, name, basename(dst_wav_path),
-                                     hparams.builder, name, basename(dst_alignment_path)))
-                    else:
-                        print(idx, ": {}\n ({} chars, {} words)".format(text, len(text), len(words)))
-            else:
-                text = line.decode("utf-8")[:-1]
-                words = nltk.word_tokenize(text)
-                waveform, alignment, _, _ = tts(
-                    model, text, p=replace_pronunciation_prob, speaker_id=speaker_id, fast=True)
-                dst_wav_path = join(dst_dir, "{}_{}{}.wav".format(
-                    idx, checkpoint_name, file_name_suffix))
-                dst_alignment_path = join(
-                    dst_dir, "{}_{}{}_alignment.png".format(idx, checkpoint_name,
-                                                            file_name_suffix))
-                plot_alignment(alignment.T, dst_alignment_path,
-                               info="{}, {}".format(hparams.builder, basename(checkpoint_path)))
-                audio.save_wav(waveform, dst_wav_path)
-                name = splitext(basename(text_list_file_path))[0]
-                if output_html:
-                    print("""
-    {}
-
-    ({} chars, {} words)
-
-    <audio controls="controls" >
-    <source src="/audio/{}/{}/{}" autoplay/>
-    Your browser does not support the audio element.
-    </audio>
-
-    <div align="center"><img src="/audio/{}/{}/{}" /></div>
-                      """.format(text, len(text), len(words),
-                                 hparams.builder, name, basename(dst_wav_path),
-                                 hparams.builder, name, basename(dst_alignment_path)))
-                else:
-                    print(idx, ": {}\n ({} chars, {} words)".format(text, len(text), len(words)))
-
-    print("Finished! Check out {} for generated audio samples.".format(dst_dir))
-    sys.exit(0)
+        metadata_df = pd.DataFrame(metadata)
+        metadata_df.to_csv("{}/metadata.csv".format(dst_dir), encoding='utf-8', index=False, header=None)
+print("Finished! Check out {} for generated audio samples.".format(dst_dir))
+sys.exit(0)
