@@ -172,5 +172,5 @@ if __name__ == "__main__":
 
         metadata_df = pd.DataFrame(metadata)
         metadata_df.to_csv("{}/metadata.csv".format(dst_dir), encoding='utf-8', index=False, header=None)
-print("Finished! Check out {} for generated audio samples.".format(dst_dir))
-sys.exit(0)
+        # print("Finished! Check out {} for generated audio samples.".format(dst_dir))
+        sys.exit(0)
