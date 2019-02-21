@@ -268,14 +268,12 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
     # Jasper spec params
     window_size_ms = 20e-3
     window_stride_ms = 10e-3
-
     sample_freq, signal = wave.read(wav_path)
+    n_window_size = int(window_size_ms * sample_freq)
+    n_window_stride = int(window_stride_ms * sample_freq)
 
     if hparams.rescaling:
         signal = signal / np.abs(signal).max() * hparams.rescaling_max
-
-    if jasper.normalize:
-        signal = (normalize_signal(signal.astype(np.float32) * 32767.0).astype(np.int16)
             
     # Get mel spectrograms
     mel_features = psf.logfbank(
@@ -289,14 +287,15 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
         highfreq=sample_freq/2,
         preemph=0.97
     )
+
     # Getting linear spectrograms
     frames = psf.sigproc.framesig(sig=signal,
-                                  frame_len=320,
-                                  frame_step=hparams.hop_size,
+                                  frame_len=n_window_size,
+                                  frame_step=n_window_stride,
                                   winfunc=np.hanning)
     # sample_freq * hparams.fft_size
-    features = psf.sigproc.logpowspec(frames, NFFT=320)
-    # features = features[:, :hparams.num_mels]
+    features = psf.sigproc.logpowspec(frames, NFFT=n_window_size)
+    features = features[:, :hparams.num_mels]
 
     n_frames = features.shape[0]
 
@@ -309,10 +308,15 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
     # e.g. Recording0.wav
     spectrogram_filename = 'spec-{}-{}.npy'.format(speaker_id, wav_name)
     mel_filename = 'mel-{}-{}.npy'.format(speaker_id, wav_name)
+
+    # Normalize audio
+    features = audio._normalize(features)
+    mel_features = audio._normalize(mel_features)
+
     np.save(os.path.join(out_dir, spectrogram_filename), features, allow_pickle=False)
     np.save(os.path.join(out_dir, mel_filename), mel_features, allow_pickle=False)
 
     return (spectrogram_filename, mel_filename, n_frames, text, speaker_id)
 
-def normalize_signal(signal):
-    return signal / np.max(np.abs(signal))
+# def normalize_signal(signal):
+    # return signal / np.max(np.abs(signal))
