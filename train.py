@@ -411,7 +411,7 @@ def eval_model(global_step, writer, device, model, checkpoint_dir, ismultispeake
                 global_step, idx, speaker_str))
             save_alignment(path, alignment)
             tag = "eval_averaged_alignment_{}_{}".format(idx, speaker_str)
-            writer.add_image(tag, np.uint8(cm.viridis(np.flip(alignment, 1).t) * 255), global_step)
+            writer.add_image(tag, np.uint8(cm.viridis(np.flip(alignment, 1).T) * 255), global_step)
 
             # Mel
             writer.add_image("(Eval) Predicted mel spectrogram text{}_{}".format(idx, speaker_str),
