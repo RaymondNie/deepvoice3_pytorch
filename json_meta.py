@@ -41,6 +41,9 @@ from os.path import exists
 import librosa
 import json
 
+import scipy.io.wavfile as wave
+import python_speech_features as psf
+
 def build_from_path(in_dir, out_dir, num_workers=1, tqdm=lambda x: x):
     executor = ProcessPoolExecutor(max_workers=num_workers)
     futures = []
@@ -111,8 +114,11 @@ def build_from_path(in_dir, out_dir, num_workers=1, tqdm=lambda x: x):
                     partial(_process_utterance_single, out_dir, text, audio_path)))
             else:
                 # Multi-speaker
+                # futures.append(executor.submit(
+                #     partial(_process_utterance, out_dir, text, audio_path, speaker_id)))
+                # TODO: Process multi-speaker for jasper
                 futures.append(executor.submit(
-                    partial(_process_utterance, out_dir, text, audio_path, speaker_id)))
+                    partial(_process_utterance_jasper, out_dir, text, audio_path, speaker_id)))
             queue_count += 1
         print(" [*] Appended {} entries in the queue".format(queue_count))
         
@@ -194,10 +200,8 @@ def _process_utterance(out_dir, text, wav_path, speaker_id=None):
     # Compute the linear-scale spectrogram from the wav:
     spectrogram = audio.spectrogram(wav).astype(np.float32)
     n_frames = spectrogram.shape[1]
-
     # Compute a mel-scale spectrogram from the wav:
     mel_spectrogram = audio.melspectrogram(wav).astype(np.float32)
-
     # Write the spectrograms to disk: 
     # Get filename from wav_path
     wav_name = os.path.basename(wav_path)
@@ -210,6 +214,9 @@ def _process_utterance(out_dir, text, wav_path, speaker_id=None):
     np.save(os.path.join(out_dir, spectrogram_filename), spectrogram.T, allow_pickle=False)
     np.save(os.path.join(out_dir, mel_filename), mel_spectrogram.T, allow_pickle=False)
     # Return a tuple describing this training example:
+    print(spectrogram.T.shape)
+    print(mel_spectrogram.T.shape)
+    print(spectrogram_filename, mel_filename, n_frames, text, speaker_id)
     return (spectrogram_filename, mel_filename, n_frames, text, speaker_id)
     
 def _process_utterance_single(out_dir, text, wav_path):
@@ -245,7 +252,6 @@ def _process_utterance_single(out_dir, text, wav_path):
 
     # Compute a mel-scale spectrogram from the wav:
     mel_spectrogram = audio.melspectrogram(wav).astype(np.float32)
-
     # Write the spectrograms to disk: 
     # Get filename from wav_path
     wav_name = os.path.basename(wav_path)
@@ -258,3 +264,59 @@ def _process_utterance_single(out_dir, text, wav_path):
     # Return a tuple describing this training example:
     return (spectrogram_filename, mel_filename, n_frames, text)
 
+def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
+    # Jasper spec params
+    window_size_ms = 20e-3
+    window_stride_ms = 10e-3
+    sample_freq, signal = wave.read(wav_path)
+    n_window_size = int(window_size_ms * sample_freq)
+    n_window_stride = int(window_stride_ms * sample_freq)
+
+    if hparams.rescaling:
+        signal = signal / np.abs(signal).max() * hparams.rescaling_max
+            
+    # Get mel spectrograms
+    mel_features = psf.logfbank(
+        signal=signal,
+        samplerate=sample_freq,
+        winlen=window_size_ms,
+        winstep=window_stride_ms,
+        nfilt=hparams.num_mels,
+        nfft=512,
+        lowfreq=0, 
+        highfreq=sample_freq/2,
+        preemph=0.97
+    )
+
+    # Getting linear spectrograms
+    frames = psf.sigproc.framesig(sig=signal,
+                                  frame_len=n_window_size,
+                                  frame_step=n_window_stride,
+                                  winfunc=np.hanning)
+    # sample_freq * hparams.fft_size
+    features = psf.sigproc.logpowspec(frames, NFFT=n_window_size)
+    # features = features[:, :hparams.num_mels]
+
+    n_frames = features.shape[0]
+
+    # Write the spectrograms to disk: 
+    # Get filename from wav_path
+    wav_name = os.path.basename(wav_path)
+    wav_name = os.path.splitext(wav_name)[0]
+    
+    # case if wave files across different speakers have the same naming format.
+    # e.g. Recording0.wav
+    spectrogram_filename = 'spec-{}-{}.npy'.format(speaker_id, wav_name)
+    mel_filename = 'mel-{}-{}.npy'.format(speaker_id, wav_name)
+
+    # Normalize audio
+    features = audio._normalize(features)
+    mel_features = audio._normalize(mel_features)
+
+    np.save(os.path.join(out_dir, spectrogram_filename), features, allow_pickle=False)
+    np.save(os.path.join(out_dir, mel_filename), mel_features, allow_pickle=False)
+
+    return (spectrogram_filename, mel_filename, n_frames, text, speaker_id)
+
+# def normalize_signal(signal):
+    # return signal / np.max(np.abs(signal))
