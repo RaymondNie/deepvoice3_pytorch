@@ -295,7 +295,7 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
                                   winfunc=np.hanning)
     # sample_freq * hparams.fft_size
     features = psf.sigproc.logpowspec(frames, NFFT=n_window_size)
-    features = features[:, :hparams.num_mels]
+    # features = features[:, :hparams.num_mels]
 
     n_frames = features.shape[0]
 
