@@ -114,11 +114,11 @@ def build_from_path(in_dir, out_dir, num_workers=1, tqdm=lambda x: x):
                     partial(_process_utterance_single, out_dir, text, audio_path)))
             else:
                 # Multi-speaker
-                # futures.append(executor.submit(
-                #     partial(_process_utterance, out_dir, text, audio_path, speaker_id)))
-                # TODO: Process multi-speaker for jasper
                 futures.append(executor.submit(
-                    partial(_process_utterance_jasper, out_dir, text, audio_path, speaker_id)))
+                    partial(_process_utterance, out_dir, text, audio_path, speaker_id)))
+                # TODO: Process multi-speaker for jasper
+                # futures.append(executor.submit(
+                    # partial(_process_utterance_jasper, out_dir, text, audio_path, speaker_id)))
             queue_count += 1
         print(" [*] Appended {} entries in the queue".format(queue_count))
         
@@ -177,7 +177,7 @@ def _process_utterance(out_dir, text, wav_path, speaker_id=None):
 
     # Load the audio to a numpy array:
     wav = audio.load_wav(wav_path)
-
+    
     lab_path = wav_path.replace("wav48/", "lab/").replace(".wav", ".lab")
     if not exists(lab_path):
         lab_path = os.path.splitext(wav_path)[0]+'.lab'
@@ -214,9 +214,6 @@ def _process_utterance(out_dir, text, wav_path, speaker_id=None):
     np.save(os.path.join(out_dir, spectrogram_filename), spectrogram.T, allow_pickle=False)
     np.save(os.path.join(out_dir, mel_filename), mel_spectrogram.T, allow_pickle=False)
     # Return a tuple describing this training example:
-    print(spectrogram.T.shape)
-    print(mel_spectrogram.T.shape)
-    print(spectrogram_filename, mel_filename, n_frames, text, speaker_id)
     return (spectrogram_filename, mel_filename, n_frames, text, speaker_id)
     
 def _process_utterance_single(out_dir, text, wav_path):

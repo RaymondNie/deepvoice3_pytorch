@@ -481,7 +481,7 @@ class Decoder(nn.Module):
         alignments = torch.stack(alignments).transpose(0, 1)
         decoder_states = torch.stack(decoder_states).transpose(0, 1).contiguous()
         outputs = torch.stack(outputs).transpose(0, 1).contiguous()
-
+        
         return outputs, alignments, dones, decoder_states
 
     def start_fresh_sequence(self):

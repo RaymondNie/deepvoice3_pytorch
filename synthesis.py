@@ -23,7 +23,6 @@ from docopt import docopt
 import sys
 import os
 from os.path import dirname, join, basename, splitext
-
 import audio
 
 import torch
@@ -42,7 +41,7 @@ use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
 _frontend = None  # to be set later
 
-def tts(model, text, p=0, speaker_id=None, fast=False):
+def tts(model, text, p=0, speaker_id=None, fast=False, batch_synthesis=False):
     """Convert text to speech waveform given a deepvoice3 model.
 
     Args:
@@ -63,16 +62,16 @@ def tts(model, text, p=0, speaker_id=None, fast=False):
     with torch.no_grad():
         mel_outputs, linear_outputs, alignments, done = model(
             sequence, text_positions=text_positions, speaker_ids=speaker_ids)
-
+    
     linear_output = linear_outputs[0].cpu().data.numpy()
     spectrogram = audio._denormalize(linear_output)
     alignment = alignments[0].cpu().data.numpy()
     mel = mel_outputs[0].cpu().data.numpy()
     mel = audio._denormalize(mel)
-
+    
     # Predicted audio signal
     waveform = audio.inv_spectrogram(linear_output.T)
-
+    
     return waveform, alignment, spectrogram, mel
 
 
@@ -118,7 +117,6 @@ if __name__ == "__main__":
     import train
     train._frontend = _frontend
     from train import plot_alignment, build_model
-
     # Model
     model = build_model()
 
@@ -143,8 +141,9 @@ if __name__ == "__main__":
         lines = f.readlines()
         for idx, line in enumerate(lines):
             generated_speech_count = 0
+            fail_count = 0
             sample_audio = [] # Get 10 audio samples 
-            while generated_speech_count < speakers_per_utterance:
+            while generated_speech_count < speakers_per_utterance and fail_count < 10:
                 # Generate a random speaker_id and try to generate audio
                 rand_speaker_id = random.randint(0,max_speaker_id)
                 text = line.decode("utf-8")[:-1]
@@ -154,12 +153,13 @@ if __name__ == "__main__":
                 soft_mask = guided_attention(alignment.shape[0], alignment.shape[0], alignment.shape[1], alignment.shape[1], 0.2)
                 attn_loss = (alignment * soft_mask).mean()
                 # Filter out poorly generated audio
-                if attn_loss < 0.00025:
-                    print("{}_{}{}_speaker_id_{}_.wav, {}".format(
+                duration = waveform.shape[0] / 22050 # divide by sample rate
+                if attn_loss < 0.00025 or duration < 16.00:
+                    print("{}_{}{}_speaker_id_{}.wav, {}".format(
                         idx, checkpoint_name, file_name_suffix, rand_speaker_id, attn_loss))
                     generated_speech_count += 1
 
-                    dst_wav_path = join(dst_dir, "{}_{}{}_speaker_id_{}_.wav".format(
+                    dst_wav_path = join(dst_dir, "{}_{}{}_speaker_id_{}.wav".format(
                         idx, checkpoint_name, file_name_suffix, rand_speaker_id))
                     dst_alignment_path = join(
                         dst_dir, "{}_{}{}_speaker_id_{}_alignment.png".format(idx, checkpoint_name,
@@ -169,6 +169,8 @@ if __name__ == "__main__":
                                    info="{}, {}".format(hparams.builder, basename(checkpoint_path)))
                     audio.save_wav(waveform, dst_wav_path)
                     name = splitext(basename(text_list_file_path))[0]
+                else:
+                    fail_count += 1
 
         metadata_df = pd.DataFrame(metadata)
         metadata_df.to_csv("{}/metadata.csv".format(dst_dir), encoding='utf-8', index=False, header=None)
