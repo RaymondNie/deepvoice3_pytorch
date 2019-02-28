@@ -293,6 +293,7 @@ class MaskedL1Loss(nn.Module):
 
 def collate_fn(batch):
     """Create batch"""
+
     r = hparams.outputs_per_step
     downsample_step = hparams.downsample_step
     multi_speaker = len(batch[0]) == 4
@@ -557,8 +558,9 @@ def guided_attention(N, max_N, T, max_T, g):
 
 
 def guided_attentions(input_lengths, target_lengths, max_target_len, g=0.2):
+    input_lengths = input_lengths.data.cpu().numpy()
     B = len(input_lengths)
-    max_input_len = input_lengths.max()
+    max_input_len = int(input_lengths.max())
     W = np.zeros((B, max_target_len, max_input_len), dtype=np.float32)
     for b in range(B):
         W[b] = guided_attention(input_lengths[b], max_input_len,
@@ -571,7 +573,7 @@ def train(device, model, data_loader, optimizer, writer,
           checkpoint_dir=None, checkpoint_interval=None, nepochs=None,
           clip_thresh=1.0,
           train_seq2seq=True, train_postnet=True):
-    linear_dim = model.linear_dim
+    linear_dim = model.module.linear_dim
     r = hparams.outputs_per_step
     downsample_step = hparams.downsample_step
     current_lr = init_lr
@@ -609,6 +611,8 @@ def train(device, model, data_loader, optimizer, writer,
             decoder_lengths = target_lengths.long().numpy() // r // downsample_step
 
             max_seq_len = max(input_lengths.max(), decoder_lengths.max())
+            input_lengths = torch.from_numpy(input_lengths).float().to(device)
+
             if max_seq_len >= hparams.max_positions:
                 raise RuntimeError(
                     """max_seq_len ({}) >= max_posision ({})
@@ -697,10 +701,13 @@ Please set a larger value for ``max_position`` in hyper parameters.""".format(
 
             # attention
             if train_seq2seq and hparams.use_guided_attention:
+                print(input_lengths)
                 soft_mask = guided_attentions(input_lengths, decoder_lengths,
                                               attn.size(-2),
                                               g=hparams.guided_attention_sigma)
                 soft_mask = torch.from_numpy(soft_mask).to(device)
+                # TODO: NOT SURE ABOUT THIS...
+                attn = attn.view(hparams.batch_size, attn.shape[2], -1)
                 attn_loss = (attn * soft_mask).mean()
                 loss += attn_loss
 
@@ -719,7 +726,7 @@ Please set a larger value for ``max_position`` in hyper parameters.""".format(
             loss.backward()
             if clip_thresh > 0:
                 grad_norm = torch.nn.utils.clip_grad_norm_(
-                    model.get_trainable_parameters(), clip_thresh)
+                    model.module.get_trainable_parameters(), clip_thresh)
             optimizer.step()
 
             # Logs
@@ -931,15 +938,17 @@ if __name__ == "__main__":
     data_loader = data_utils.DataLoader(
         dataset, batch_size=hparams.batch_size,
         num_workers=hparams.num_workers, sampler=sampler,
-        collate_fn=collate_fn, pin_memory=hparams.pin_memory)
+        collate_fn=collate_fn, pin_memory=hparams.pin_memory,
+        drop_last=True)
 
     device = torch.device("cuda" if use_cuda else "cpu")
     
     # Model
-    model = build_model().to(device)
+    model = build_model()
+    model = nn.DataParallel(model)
+    model.to(device)
 
-
-    optimizer = optim.Adam(model.get_trainable_parameters(),
+    optimizer = optim.Adam(model.module.get_trainable_parameters(),
                            lr=hparams.initial_learning_rate, betas=(
         hparams.adam_beta1, hparams.adam_beta2),
         eps=hparams.adam_eps, weight_decay=hparams.weight_decay,

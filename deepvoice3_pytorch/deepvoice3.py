@@ -69,7 +69,6 @@ class Encoder(nn.Module):
     def forward(self, text_sequences, text_positions=None, lengths=None,
                 speaker_embed=None):
         assert self.n_speakers == 1 or speaker_embed is not None
-
         # embed text_sequences
         x = self.embed_tokens(text_sequences.long())
         x = F.dropout(x, p=self.dropout, training=self.training)
@@ -361,7 +360,6 @@ class Decoder(nn.Module):
 
         # Done flag
         done = torch.sigmoid(self.fc(x))
-
         return outputs, torch.stack(alignments), done, decoder_states
 
     def incremental_forward(self, encoder_out, text_positions, speaker_embed=None,
@@ -581,7 +579,6 @@ class Converter(nn.Module):
 
     def forward(self, x, speaker_embed=None):
         assert self.n_speakers == 1 or speaker_embed is not None
-
         # expand speaker embedding for all time steps
         speaker_embed_btc = expand_speaker_embed(x, speaker_embed)
         if speaker_embed_btc is not None:
@@ -589,7 +586,6 @@ class Converter(nn.Module):
 
         # Generic case: B x T x C -> B x C x T
         x = x.transpose(1, 2)
-
         for f in self.convolutions:
             # Case for upsampling
             if speaker_embed_btc is not None and speaker_embed_btc.size(1) != x.size(-1):
@@ -597,8 +593,6 @@ class Converter(nn.Module):
                 speaker_embed_btc = F.dropout(
                     speaker_embed_btc, p=self.dropout, training=self.training)
             x = f(x, speaker_embed_btc) if isinstance(f, Conv1dGLU) else f(x)
-
         # Back to B x T x C
         x = x.transpose(1, 2)
-
         return torch.sigmoid(x)
