@@ -51,7 +51,7 @@ def tts(model, text, p=0, speaker_id=None, fast=False, batch_synthesis=False):
     model = model.to(device)
     model.eval()
     if fast:
-        model.make_generation_fast_()
+        model.module.make_generation_fast_()
 
     sequence = np.array(_frontend.text_to_sequence(text, p=p))
     sequence = torch.from_numpy(sequence).unsqueeze(0).long().to(device)
