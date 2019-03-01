@@ -589,7 +589,15 @@ def train(device, model, data_loader, optimizer, writer,
           init_lr=0.002,
           checkpoint_dir=None, checkpoint_interval=None, nepochs=None,
           clip_thresh=1.0,
-          train_seq2seq=True, train_postnet=True, local_rank=0):
+          train_seq2seq=True, train_postnet=True, local_rank=0, distributed=False):
+
+    if distributed:
+        model.cuda()
+        model = DDP(model)
+    else:
+        model = nn.DataParallel(model)
+        model.to(device)
+
     linear_dim = model.module.linear_dim
     r = hparams.outputs_per_step
     downsample_step = hparams.downsample_step
@@ -1015,14 +1023,8 @@ if __name__ == "__main__":
     
     # Model
     model = build_model()
-    if distributed:
-        model.cuda()
-        model = DDP(model)
-    else:
-        model = nn.DataParallel(model)
-        model.to(device)
 
-    optimizer = optim.Adam(model.module.get_trainable_parameters(),
+    optimizer = optim.Adam(model.get_trainable_parameters(),
                            lr=hparams.initial_learning_rate, betas=(
         hparams.adam_beta1, hparams.adam_beta2),
         eps=hparams.adam_eps, weight_decay=hparams.weight_decay,
@@ -1066,7 +1068,9 @@ if __name__ == "__main__":
               checkpoint_interval=hparams.checkpoint_interval,
               nepochs=hparams.nepochs,
               clip_thresh=hparams.clip_thresh,
-              train_seq2seq=train_seq2seq, train_postnet=train_postnet, local_rank=int(local_rank))
+              train_seq2seq=train_seq2seq, train_postnet=train_postnet, 
+              local_rank=int(local_rank),
+              distributed=distributed)
     except KeyboardInterrupt:
         save_checkpoint(
             model, optimizer, global_step, checkpoint_dir, global_epoch,

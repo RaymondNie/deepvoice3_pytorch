@@ -236,7 +236,6 @@ def get_mask_from_lengths(memory, memory_lengths):
         memory_lengths: array like
     """
     mask = memory.data.new(memory.size(0), memory.size(1)).byte().zero_()
-    # TODO: DO THIS ON GPU
     memory_lengths = memory_lengths.data.cpu().numpy()
     for idx, l in enumerate(memory_lengths):
         mask[idx][:int(l)] = 1 
