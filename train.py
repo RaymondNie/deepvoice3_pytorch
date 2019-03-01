@@ -588,7 +588,7 @@ def train(device, model, data_loader, optimizer, writer,
           init_lr=0.002,
           checkpoint_dir=None, checkpoint_interval=None, nepochs=None,
           clip_thresh=1.0,
-          train_seq2seq=True, train_postnet=True):
+          train_seq2seq=True, train_postnet=True, local_rank=0):
     linear_dim = model.module.linear_dim
     r = hparams.outputs_per_step
     downsample_step = hparams.downsample_step
@@ -729,8 +729,8 @@ Please set a larger value for ``max_position`` in hyper parameters.""".format(
                 attn = attn.view(hparams.batch_size, attn.shape[2], -1)
                 attn_loss = (attn * soft_mask).mean()
                 loss += attn_loss
-
-            if global_step > 0 and global_step % checkpoint_interval == 0:
+            
+            if global_step > 0 and global_step % checkpoint_interval == 0 and local_rank == 0:
                 save_states(
                     global_step, writer, mel_outputs, linear_outputs, attn,
                     mel, y, input_lengths, checkpoint_dir)
@@ -738,7 +738,7 @@ Please set a larger value for ``max_position`` in hyper parameters.""".format(
                     model, optimizer, global_step, checkpoint_dir, global_epoch,
                     train_seq2seq, train_postnet)
 
-            if global_step > 0 and global_step % hparams.eval_interval == 0:
+            if global_step > 0 and global_step % hparams.eval_interval == 0 and local_rank == 0:
                 eval_model(global_step, writer, device, model, checkpoint_dir, ismultispeaker)
 
             # Update
@@ -748,30 +748,31 @@ Please set a larger value for ``max_position`` in hyper parameters.""".format(
                     model.module.get_trainable_parameters(), clip_thresh)
             optimizer.step()
 
+            if local_rank == 0:
                 # Logs
-            writer.add_scalar("loss", float(loss.item()), global_step)
-            if train_seq2seq:
-                writer.add_scalar("done_loss", float(done_loss.item()), global_step)
-                writer.add_scalar("mel loss", float(mel_loss.item()), global_step)
-                writer.add_scalar("mel_l1_loss", float(mel_l1_loss.item()), global_step)
-                writer.add_scalar("mel_binary_div_loss", float(mel_binary_div.item()), global_step)
-            if train_postnet:
-                writer.add_scalar("linear_loss", float(linear_loss.item()), global_step)
-                writer.add_scalar("linear_l1_loss", float(linear_l1_loss.item()), global_step)
-                writer.add_scalar("linear_binary_div_loss", float(
-                    linear_binary_div.item()), global_step)
-            if train_seq2seq and hparams.use_guided_attention:
-                writer.add_scalar("attn_loss", float(attn_loss.item()), global_step)
-            if clip_thresh > 0:
-                writer.add_scalar("gradient norm", grad_norm, global_step)
-            writer.add_scalar("learning rate", current_lr, global_step)
+                writer.add_scalar("loss", float(loss.item()), global_step)
+                if train_seq2seq:
+                    writer.add_scalar("done_loss", float(done_loss.item()), global_step)
+                    writer.add_scalar("mel loss", float(mel_loss.item()), global_step)
+                    writer.add_scalar("mel_l1_loss", float(mel_l1_loss.item()), global_step)
+                    writer.add_scalar("mel_binary_div_loss", float(mel_binary_div.item()), global_step)
+                if train_postnet:
+                    writer.add_scalar("linear_loss", float(linear_loss.item()), global_step)
+                    writer.add_scalar("linear_l1_loss", float(linear_l1_loss.item()), global_step)
+                    writer.add_scalar("linear_binary_div_loss", float(
+                        linear_binary_div.item()), global_step)
+                if train_seq2seq and hparams.use_guided_attention:
+                    writer.add_scalar("attn_loss", float(attn_loss.item()), global_step)
+                if clip_thresh > 0:
+                    writer.add_scalar("gradient norm", grad_norm, global_step)
+                writer.add_scalar("learning rate", current_lr, global_step)
 
-            global_step += 1
-            running_loss += float(loss.item())
+                global_step += 1
+                running_loss += float(loss.item())
 
-            averaged_loss = running_loss / (len(data_loader))
-            writer.add_scalar("loss (per epoch)", averaged_loss, global_epoch)
-            # print("Loss: {}".format(running_loss / (len(data_loader))))
+                averaged_loss = running_loss / (len(data_loader))
+                writer.add_scalar("loss (per epoch)", averaged_loss, global_epoch)
+                # print("Loss: {}".format(running_loss / (len(data_loader))))
 
         global_epoch += 1
 
@@ -1046,14 +1047,15 @@ if __name__ == "__main__":
 
     writer = None
     # Setup summary writer for tensorboard
-    if log_event_path is None:
-        if platform.system() == "Windows":
-            log_event_path = "log/run-test" + \
-                str(datetime.now()).replace(" ", "_").replace(":", "_")
-        else:
-            log_event_path = "log/run-test"
-    print("Los event path: {}".format(log_event_path))
-    writer = SummaryWriter(log_dir=log_event_path)
+    if int(local_rank) == 0:
+        if log_event_path is None:
+            if platform.system() == "Windows":
+                log_event_path = "log/run-test" + \
+                    str(datetime.now()).replace(" ", "_").replace(":", "_")
+            else:
+                log_event_path = "log/run-test" + str(datetime.now()).replace(" ", "_")
+        print("Los event path: {}".format(log_event_path))
+        writer = SummaryWriter(log_dir=log_event_path)
 
     # Train!
     try:
@@ -1063,7 +1065,7 @@ if __name__ == "__main__":
               checkpoint_interval=hparams.checkpoint_interval,
               nepochs=hparams.nepochs,
               clip_thresh=hparams.clip_thresh,
-              train_seq2seq=train_seq2seq, train_postnet=train_postnet)
+              train_seq2seq=train_seq2seq, train_postnet=train_postnet, local_rank=int(local_rank))
     except KeyboardInterrupt:
         save_checkpoint(
             model, optimizer, global_step, checkpoint_dir, global_epoch,
