@@ -17,6 +17,7 @@ options:
     --reset-optimizer            Reset optimizer.
     --load-embedding=<path>      Load embedding from checkpoint.
     --speaker-id=<N>             Use specific speaker of data in case for multi-speaker datasets.
+    --local_rank=<N>             ss
     -h, --help                   Show this help message and exit
 """
 from docopt import docopt
@@ -55,6 +56,22 @@ from matplotlib import cm
 from warnings import warn
 from hparams import hparams, hparams_debug_string
 
+#=====START: ADDED FOR DISTRIBUTED======
+'''Add custom module for distributed'''
+
+try:
+    from apex.parallel import DistributedDataParallel as DDP
+except ImportError:
+    raise ImportError("Please install apex from https://www.github.com/nvidia/apex to run this example.")
+
+'''Import distributed data loader'''
+import torch.utils.data
+import torch.utils.data.distributed
+
+'''Import torch.distributed'''
+import torch.distributed as dist
+
+#=====END:   ADDED FOR DISTRIBUTED======
 
 global_step = 0
 global_epoch = 0
@@ -63,7 +80,6 @@ if use_cuda:
     cudnn.benchmark = False
 
 _frontend = None  # to be set later
-
 
 def _pad(seq, max_len, constant_values=0):
     return np.pad(seq, (0, max_len - len(seq)),
@@ -588,6 +604,10 @@ def train(device, model, data_loader, optimizer, writer,
         for step, (x, input_lengths, mel, y, positions, done, target_lengths,
                    speaker_ids) \
                 in tqdm(enumerate(data_loader)):
+
+            if distributed:
+                sampler.set_epoch(global_epoch)
+
             model.train()
             ismultispeaker = speaker_ids is not None
             # Learning rate schedule
@@ -701,7 +721,6 @@ Please set a larger value for ``max_position`` in hyper parameters.""".format(
 
             # attention
             if train_seq2seq and hparams.use_guided_attention:
-                print(input_lengths)
                 soft_mask = guided_attentions(input_lengths, decoder_lengths,
                                               attn.size(-2),
                                               g=hparams.guided_attention_sigma)
@@ -729,7 +748,7 @@ Please set a larger value for ``max_position`` in hyper parameters.""".format(
                     model.module.get_trainable_parameters(), clip_thresh)
             optimizer.step()
 
-            # Logs
+                # Logs
             writer.add_scalar("loss", float(loss.item()), global_step)
             if train_seq2seq:
                 writer.add_scalar("done_loss", float(done_loss.item()), global_step)
@@ -748,11 +767,11 @@ Please set a larger value for ``max_position`` in hyper parameters.""".format(
             writer.add_scalar("learning rate", current_lr, global_step)
 
             global_step += 1
-            running_loss += loss.item()
+            running_loss += float(loss.item())
 
-        averaged_loss = running_loss / (len(data_loader))
-        writer.add_scalar("loss (per epoch)", averaged_loss, global_epoch)
-        print("Loss: {}".format(running_loss / (len(data_loader))))
+            averaged_loss = running_loss / (len(data_loader))
+            writer.add_scalar("loss (per epoch)", averaged_loss, global_epoch)
+            # print("Loss: {}".format(running_loss / (len(data_loader))))
 
         global_epoch += 1
 
@@ -911,6 +930,43 @@ if __name__ == "__main__":
     # Override hyper parameters
     hparams.parse(args["--hparams"])
 
+    #======START: ADDED FOR DISTRIBUTED======
+    '''
+    Add some distributed options. For explanation of dist-url and dist-backend please see
+    http://pytorch.org/tutorials/intermediate/dist_tuto.html
+    --local_rank will be supplied by the Pytorch launcher wrapper (torch.distributed.launch)
+    '''
+    local_rank = args.get("--local_rank", 0)
+    if local_rank == None:
+        local_rank = 0
+    #=====END:   ADDED FOR DISTRIBUTED======
+
+
+    #======START: ADDED FOR DISTRIBUTED======
+    '''Add a convenience flag to see if we are running distributed'''
+    distributed = False
+    if 'WORLD_SIZE' in os.environ:
+        distributed = int(os.environ['WORLD_SIZE']) > 1
+
+    cuda = torch.cuda.is_available()
+
+    if distributed:
+        '''Check that we are running with cuda, as distributed is only supported for cuda.'''
+        assert cuda, "Distributed mode requires running with CUDA."
+
+        '''
+        Set cuda device so everything is done on the right GPU.
+        THIS MUST BE DONE AS SOON AS POSSIBLE.
+        '''
+        torch.cuda.set_device(int(local_rank))
+
+        '''Initialize distributed communication'''
+        torch.distributed.init_process_group(backend='nccl',
+                                             init_method='env://')
+
+    #=====END:   ADDED FOR DISTRIBUTED======
+
+
     # Preventing Windows specific error such as MemoryError
     # Also reduces the occurrence of THAllocator.c 0x05 error in Widows build of PyTorch
     if platform.system() == "Windows":
@@ -928,25 +984,41 @@ if __name__ == "__main__":
     Mel = FileSourceDataset(MelSpecDataSource(data_root, speaker_id))
     Y = FileSourceDataset(LinearSpecDataSource(data_root, speaker_id))
 
+    hparams.batch_size *=  int(torch.cuda.device_count())
+
     # Prepare sampler
     frame_lengths = Mel.file_data_source.frame_lengths
     sampler = PartialyRandomizedSimilarTimeLengthSampler(
         frame_lengths, batch_size=hparams.batch_size)
 
+    #=====START: ADDED FOR DISTRIBUTED======
+
     # Dataset and Dataloader setup
     dataset = PyTorchDataset(X, Mel, Y)
+
+    if distributed:
+        sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+    else:
+        sampler = PartialyRandomizedSimilarTimeLengthSampler(frame_lengths, batch_size=hparams.batch_size)
+
     data_loader = data_utils.DataLoader(
         dataset, batch_size=hparams.batch_size,
         num_workers=hparams.num_workers, sampler=sampler,
         collate_fn=collate_fn, pin_memory=hparams.pin_memory,
         drop_last=True)
 
+    #=====END:   ADDED FOR DISTRIBUTED======
+
     device = torch.device("cuda" if use_cuda else "cpu")
     
     # Model
     model = build_model()
-    model = nn.DataParallel(model)
-    model.to(device)
+    if distributed:
+        model.cuda()
+        model = DDP(model)
+    else:
+        model = nn.DataParallel(model)
+        model.to(device)
 
     optimizer = optim.Adam(model.module.get_trainable_parameters(),
                            lr=hparams.initial_learning_rate, betas=(
@@ -972,13 +1044,14 @@ if __name__ == "__main__":
         print("Loading embedding from {}".format(load_embedding))
         _load_embedding(load_embedding, model)
 
+    writer = None
     # Setup summary writer for tensorboard
     if log_event_path is None:
         if platform.system() == "Windows":
             log_event_path = "log/run-test" + \
                 str(datetime.now()).replace(" ", "_").replace(":", "_")
         else:
-            log_event_path = "log/run-test" + str(datetime.now()).replace(" ", "_")
+            log_event_path = "log/run-test"
     print("Los event path: {}".format(log_event_path))
     writer = SummaryWriter(log_dir=log_event_path)
 
