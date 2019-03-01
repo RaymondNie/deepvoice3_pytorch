@@ -409,7 +409,8 @@ def eval_model(global_step, writer, device, model, checkpoint_dir, ismultispeake
     os.makedirs(eval_output_dir, exist_ok=True)
 
     # Prepare model for evaluation
-    model_eval = build_model().to(device)
+    model_eval = build_model()
+    model_eval = nn.DataParallel(model_eval).to(device)
     model_eval.load_state_dict(model.state_dict())
 
     # hard coded
@@ -729,7 +730,7 @@ Please set a larger value for ``max_position`` in hyper parameters.""".format(
                 attn = attn.view(hparams.batch_size, attn.shape[2], -1)
                 attn_loss = (attn * soft_mask).mean()
                 loss += attn_loss
-            
+
             if global_step > 0 and global_step % checkpoint_interval == 0 and local_rank == 0:
                 save_states(
                     global_step, writer, mel_outputs, linear_outputs, attn,
