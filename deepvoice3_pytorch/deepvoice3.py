@@ -455,7 +455,7 @@ class Decoder(nn.Module):
 
             # Ooutput & done flag predictions
             
-            outputs = torch.sigmoid(x)
+            output = torch.sigmoid(x)
             done = torch.sigmoid(self.fc(x))
 
             decoder_states += [decoder_state]
