@@ -357,7 +357,6 @@ class Decoder(nn.Module):
 
         # project to mel-spectorgram
         outputs = torch.sigmoid(x)
-
         # Done flag
         done = torch.sigmoid(self.fc(x))
         return outputs, torch.stack(alignments), done, decoder_states
@@ -455,7 +454,8 @@ class Decoder(nn.Module):
             ave_alignment = ave_alignment.div_(num_attention_layers)
 
             # Ooutput & done flag predictions
-            output = torch.sigmoid(x)
+            
+            outputs = torch.sigmoid(x)
             done = torch.sigmoid(self.fc(x))
 
             decoder_states += [decoder_state]

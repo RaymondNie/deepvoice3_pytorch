@@ -115,10 +115,7 @@ def build_from_path(in_dir, out_dir, num_workers=1, tqdm=lambda x: x):
             else:
                 # Multi-speaker
                 futures.append(executor.submit(
-                    partial(_process_utterance, out_dir, text, audio_path, speaker_id)))
-                # TODO: Process multi-speaker for jasper
-                # futures.append(executor.submit(
-                    # partial(_process_utterance_jasper, out_dir, text, audio_path, speaker_id)))
+                    partial(_process_utterance_jasper, out_dir, text, audio_path, speaker_id)))
             queue_count += 1
         print(" [*] Appended {} entries in the queue".format(queue_count))
         
@@ -266,12 +263,11 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
     window_size_ms = 20e-3
     window_stride_ms = 10e-3
     sample_freq, signal = wave.read(wav_path)
+
     n_window_size = int(window_size_ms * sample_freq)
     n_window_stride = int(window_stride_ms * sample_freq)
 
-    if hparams.rescaling:
-        signal = signal / np.abs(signal).max() * hparams.rescaling_max
-            
+    signal = signal / np.abs(signal).max() * hparams.rescaling_max 
     # Get mel spectrograms
     mel_features = psf.logfbank(
         signal=signal,
@@ -282,18 +278,16 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
         nfft=512,
         lowfreq=0, 
         highfreq=sample_freq/2,
-        preemph=0.97
+        preemph=0.97,
+        winfunc=np.hanning
     )
 
     # Getting linear spectrograms
     frames = psf.sigproc.framesig(sig=signal,
-                                  frame_len=n_window_size,
-                                  frame_step=n_window_stride,
+                                  frame_len=hparams.fft_size,
+                                  frame_step=hparams.fft_size/2,
                                   winfunc=np.hanning)
-    # sample_freq * hparams.fft_size
-    features = psf.sigproc.logpowspec(frames, NFFT=n_window_size)
-    # features = features[:, :hparams.num_mels]
-
+    features = psf.sigproc.logpowspec(frames, NFFT=hparams.fft_size)
     n_frames = features.shape[0]
 
     # Write the spectrograms to disk: 
@@ -306,7 +300,6 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
     spectrogram_filename = 'spec-{}-{}.npy'.format(speaker_id, wav_name)
     mel_filename = 'mel-{}-{}.npy'.format(speaker_id, wav_name)
 
-    # Normalize audio
     features = audio._normalize(features)
     mel_features = audio._normalize(mel_features)
 
@@ -314,6 +307,3 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
     np.save(os.path.join(out_dir, mel_filename), mel_features, allow_pickle=False)
 
     return (spectrogram_filename, mel_filename, n_frames, text, speaker_id)
-
-# def normalize_signal(signal):
-    # return signal / np.max(np.abs(signal))
