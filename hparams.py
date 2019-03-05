@@ -31,12 +31,12 @@ hparams = hparam_tf.hparam.HParams(
     speaker_embed_dim=16,
 
     # Audio:
-    num_mels=80,
+    num_mels=64,
     fmin=125,
     fmax=7600,
-    fft_size=1024,
-    hop_size=256,
-    sample_rate=22050,
+    fft_size=320,
+    hop_size=160,
+    sample_rate=16000,
     preemphasis=0.97,
     min_level_db=-100,
     ref_level_db=20,

@@ -267,7 +267,8 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
     n_window_size = int(window_size_ms * sample_freq)
     n_window_stride = int(window_stride_ms * sample_freq)
 
-    signal = signal / np.abs(signal).max() * hparams.rescaling_max 
+    signal = signal / np.abs(signal).max() * hparams.rescaling_max
+
     # Get mel spectrograms
     mel_features = psf.logfbank(
         signal=signal,
@@ -284,11 +285,17 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
 
     # Getting linear spectrograms
     frames = psf.sigproc.framesig(sig=signal,
-                                  frame_len=hparams.fft_size,
-                                  frame_step=hparams.fft_size/2,
+                                  frame_len=n_window_size,
+                                  frame_step=n_window_stride,
                                   winfunc=np.hanning)
-    features = psf.sigproc.logpowspec(frames, NFFT=hparams.fft_size)
+    features = psf.sigproc.logpowspec(frames, NFFT=512)
+    features *= 2
     n_frames = features.shape[0]
+
+    # mel features in not in db but features is
+    mel_features = np.exp(mel_features)
+    mel_features = 20 * np.log10(mel_features) - hparams.ref_level_db
+    features -= hparams.ref_level_db
 
     # Write the spectrograms to disk: 
     # Get filename from wav_path

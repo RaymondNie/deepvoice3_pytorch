@@ -90,3 +90,27 @@ def _normalize(S):
 
 def _denormalize(S):
     return (np.clip(S, 0, 1) * -hparams.min_level_db) + hparams.min_level_db
+
+def jasper_inverse_mel(log_mel, fs, n_fft, n_mels, power=2.0, htk=True):
+    log_mel = 10 ** (log_mel / 10)
+    mel_basis = librosa.filters.mel(fs, n_fft, n_mels=n_mels, htk=htk)
+    mel_spec = np.exp(log_mel)
+    mag_spec = np.dot(mel_spec, mel_basis)
+    mag_spec = np.power(mag_spec, 1. / power)
+    return mag_spec
+
+def jasper_griffin_lim(mag, n_iters=50, n_fft=512):
+    phase = np.exp(2j * np.pi * np.random.rand(*mag.shape))
+    complex_spec = mag * phase
+    signal = librosa.istft(complex_spec, hop_length=160, win_length=320)
+    for _ in range(n_iters):
+        _, phase = librosa.magphase(librosa.stft(signal, n_fft=n_fft, hop_length=160, win_length=320))
+        complex_spec = mag * phase
+        signal= librosa.istft(complex_spec, hop_length=160, win_length=320)
+    return signal
+
+def jasper_get_mag_spec(spec):
+    spec = 10 ** (spec/20)
+    spec *= 512
+    mag_spec = spec ** (0.5)
+    return mag_spec

@@ -19,6 +19,7 @@ options:
     -h, --help               Show help message.
 """
 from docopt import docopt
+from torch import nn
 
 import sys
 import os
@@ -63,16 +64,26 @@ def tts(model, text, p=0, speaker_id=None, fast=False, batch_synthesis=False):
         mel_outputs, linear_outputs, alignments, done = model(
             sequence, text_positions=text_positions, speaker_ids=speaker_ids)
     
-    linear_output = linear_outputs[0].cpu().data.numpy()
-    spectrogram = audio._denormalize(linear_output)
-    alignment = alignments[0].cpu().data.numpy()
-    mel = mel_outputs[0].cpu().data.numpy()
-    mel = audio._denormalize(mel)
+    # linear_output = linear_outputs[0].cpu().data.numpy()
+    # spectrogram = audio._denormalize(linear_output)
+    # alignment = alignments[0].cpu().data.numpy()
+    # mel = mel_outputs[0].cpu().data.numpy()
+    # mel = audio._denormalize(mel)
     
-    # Predicted audio signal
-    waveform = audio.inv_spectrogram(linear_output.T)
+    # # Predicted audio signal
+    # waveform = audio.inv_spectrogram(linear_output.T)
     
-    return waveform, alignment, spectrogram, mel
+    # Jasper conversions
+    linear_outputs = audio._denormalize(linear_outputs) + 20
+    mel_outputs = audio._denormalize(mel_outputs) + 20
+
+    mel_to_mag = audio.jasper_inverse_mel(mel_outputs, 16000, 512, 64)
+    mag_to_mag = audio.jasper_get_mag_spec(linear_outputs)
+
+    mel_signal = audio.jasper_griffin_lim(mel_to_mag.T)
+    mag_signal = audio.jasper_griffin_lim(mag_to_mag.T)
+
+    return mel_signal, mag_signal, alignment, spectrogram, mel
 
 
 def _load(checkpoint_path):
@@ -119,6 +130,7 @@ if __name__ == "__main__":
     from train import plot_alignment, build_model
     # Model
     model = build_model()
+    model = nn.DataParallel(model)
 
     # Load checkpoints separately
     if checkpoint_postnet_path is not None and checkpoint_seq2seq_path is not None:
@@ -132,7 +144,7 @@ if __name__ == "__main__":
         model.load_state_dict(checkpoint["state_dict"])
         checkpoint_name = splitext(basename(checkpoint_path))[0]
 
-    model.seq2seq.decoder.max_decoder_steps = max_decoder_steps
+    model.module.seq2seq.decoder.max_decoder_steps = max_decoder_steps
 
     os.makedirs(dst_dir, exist_ok=True)
     metadata = []
