@@ -74,8 +74,8 @@ def tts(model, text, p=0, speaker_id=None, fast=False, batch_synthesis=False):
     # waveform = audio.inv_spectrogram(linear_output.T)
     
     # Jasper conversions
-    linear_outputs = linear_outputs.weight.data.cpu().numpy()
-    mel_outputs = mel_outputs.weight.data.cpu().numpy()
+    linear_outputs = linear_outputs.data.cpu().numpy()
+    mel_outputs = mel_outputs.data.cpu().numpy()
 
     linear_outputs = audio._denormalize(linear_outputs) + 20
     mel_outputs = audio._denormalize(mel_outputs) + 20
