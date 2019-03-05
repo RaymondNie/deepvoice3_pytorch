@@ -65,7 +65,6 @@ def tts(model, text, p=0, speaker_id=None, fast=False, batch_synthesis=False):
             sequence, text_positions=text_positions, speaker_ids=speaker_ids)
     
     # linear_output = linear_outputs[0].cpu().data.numpy()
-    spectrogram = audio._denormalize(linear_output)
     alignment = alignments[0].cpu().data.numpy()
     # mel = mel_outputs[0].cpu().data.numpy()
     # mel = audio._denormalize(mel)
@@ -76,6 +75,7 @@ def tts(model, text, p=0, speaker_id=None, fast=False, batch_synthesis=False):
     # Jasper conversions
     linear_output = linear_outputs[0].data.cpu().numpy()
     mel = mel_outputs[0].data.cpu().numpy()
+    spectrogram = audio._denormalize(linear_output)
 
     linear_output = audio._denormalize(linear_output) + 20
     mel = audio._denormalize(mel) + 20
