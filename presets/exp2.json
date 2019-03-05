@@ -22,7 +22,7 @@
   "embedding_weight_std": 0.1,
   "speaker_embedding_weight_std": 0.05,
   "padding_idx": 0,
-  "max_positions": 1024,
+  "max_positions": 2048,
   "dropout": 0.050000000000000044,
   "kernel_size": 3,
   "text_embed_dim": 256,
