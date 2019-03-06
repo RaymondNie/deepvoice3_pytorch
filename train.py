@@ -419,10 +419,10 @@ def eval_model(global_step, writer, device, model, checkpoint_dir, ismultispeake
         speaker_str = "multispeaker{}".format(speaker_id) if speaker_id is not None else "single"
 
         for idx, text in enumerate(texts):
-            mel_signal, mag_signal, alignment, _, mel = synthesis.tts(
+            mag_signal, alignment, _, mel = synthesis.tts(
                 model_eval, text, p=0, speaker_id=speaker_id, fast=True)
 
-            mel_signal /= np.max(np.abs(mel_signal))
+            # mel_signal /= np.max(np.abs(mel_signal))
             mag_signal /= np.max(np.abs(mag_signal))
 
             # Alignment
@@ -437,17 +437,17 @@ def eval_model(global_step, writer, device, model, checkpoint_dir, ismultispeake
                              prepare_spec_image(mel), global_step)
 
             # Audio
-            mel_path = join(eval_output_dir, "step{:09d}_text{}_{}_predicted.wav".format(
-                global_step, idx, speaker_str))
-            audio.save_wav(mel_signal, mel_path)
+            # mel_path = join(eval_output_dir, "step{:09d}_text{}_{}_predicted.wav".format(
+            #     global_step, idx, speaker_str))
+            # audio.save_wav(mel_signal, mel_path)
 
             mag_path = join(eval_output_dir, "step{:09d}_text{}_{}_predicted.wav".format(
                 global_step, idx, speaker_str))
             audio.save_wav(mag_signal, mag_path)
 
             try:
-                writer.add_audio("(Eval) Predicted mel audio signal {}_{}".format(idx, speaker_str),
-                                 mel_signal, global_step, sample_rate=hparams.sample_rate)
+                # writer.add_audio("(Eval) Predicted mel audio signal {}_{}".format(idx, speaker_str),
+                #                  mel_signal, global_step, sample_rate=hparams.sample_rate)
 
                 writer.add_audio("(Eval) Predicted mag audio signal {}_{}".format(idx, speaker_str),
                                  mag_signal, global_step, sample_rate=hparams.sample_rate)

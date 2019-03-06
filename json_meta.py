@@ -294,9 +294,10 @@ def _process_utterance_jasper(out_dir, text, wav_path, speaker_id):
 
     # mel features in not in db but features is
     mel_features = np.exp(mel_features)
-    mel_features = 20 * np.log10(mel_features) - hparams.ref_level_db
+    min_level = np.exp(hparams.min_level_db / 20 * np.log(10))
+    mel_features = 20 * np.log10(np.maximum(min_level,mel_features)) - hparams.ref_level_db
     features -= hparams.ref_level_db
-
+    features[features < min_level] = min_level
     # Write the spectrograms to disk: 
     # Get filename from wav_path
     wav_name = os.path.basename(wav_path)

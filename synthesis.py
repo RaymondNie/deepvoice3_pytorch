@@ -78,18 +78,15 @@ def tts(model, text, p=0, speaker_id=None, fast=False, batch_synthesis=False):
     spectrogram = audio._denormalize(linear_output)
 
     linear_output = audio._denormalize(linear_output) + 20
-    mel = audio._denormalize(mel) + 20
+    # mel = audio._denormalize(mel) + 20
 
-    mel_to_mag = audio.jasper_inverse_mel(mel, 16000, 512, 64)
+    # mel_to_mag = audio.jasper_inverse_mel(mel, 16000, 512, 64)
     mag_to_mag = audio.jasper_get_mag_spec(linear_output)
 
-    print(mel_to_mag.shape)
-    print(mag_to_mag.shape)
-
-    mel_signal = audio.jasper_griffin_lim(mel_to_mag.T)
+    # mel_signal = audio.jasper_griffin_lim(mel_to_mag.T)
     mag_signal = audio.jasper_griffin_lim(mag_to_mag.T)
 
-    return mel_signal, mag_signal, alignment, spectrogram, mel
+    return mag_signal, alignment, spectrogram, mel
 
 
 def _load(checkpoint_path):
