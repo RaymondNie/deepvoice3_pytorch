@@ -3,12 +3,17 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import math
 import numpy as np
 
 from .modules import Conv1d, ConvTranspose1d, Embedding, Linear, GradMultiply
 from .modules import get_mask_from_lengths, SinusoidalEncoding, Conv1dGLU
 
+
+def _pad(seq, max_len=2004, constant_values=0):
+    return np.pad(seq, ((0, max_len - len(seq)),(0,0)),
+                  mode='constant', constant_values=constant_values)
 
 def expand_speaker_embed(inputs_btc, speaker_embed=None, tdim=1):
     if speaker_embed is None:
@@ -68,6 +73,8 @@ class Encoder(nn.Module):
 
     def forward(self, text_sequences, text_positions=None, lengths=None,
                 speaker_embed=None):
+        total_length = text_sequences.size(1)
+
         assert self.n_speakers == 1 or speaker_embed is not None
         # embed text_sequences
         x = self.embed_tokens(text_sequences.long())
@@ -392,6 +399,9 @@ class Decoder(nn.Module):
         if initial_input is None:
             initial_input = keys.data.new(B, 1, self.in_dim * self.r).zero_()
         current_input = initial_input
+
+        stop_frame = torch.zeros(B)
+
         while True:
             # frame pos start with 1.
             frame_pos = keys.data.new(B, 1).fill_(t + 1).long()
@@ -467,9 +477,8 @@ class Decoder(nn.Module):
             if test_inputs is None:
                 if (done > 0.5).all() and t > self.min_decoder_steps:
                     break
-                elif t > self.max_decoder_steps:
+                elif t >= self.max_decoder_steps:
                     break
-
         # Remove 1-element time axis
         alignments = list(map(lambda x: x.squeeze(1), alignments))
         decoder_states = list(map(lambda x: x.squeeze(1), decoder_states))
@@ -479,7 +488,14 @@ class Decoder(nn.Module):
         alignments = torch.stack(alignments).transpose(0, 1)
         decoder_states = torch.stack(decoder_states).transpose(0, 1).contiguous()
         outputs = torch.stack(outputs).transpose(0, 1).contiguous()
-        
+
+        outputs = torch.FloatTensor([_pad(output, self.max_decoder_steps) for output in outputs])
+        decoder_states = torch.FloatTensor([_pad(dstate, self.max_decoder_steps) for dstate in decoder_states])
+        alignments = torch.FloatTensor([_pad(alignment, self.max_decoder_steps) for alignment in alignments])
+        alignments = alignments.to('cuda')
+        decoder_states = decoder_states.to('cuda')
+        outputs = outputs.to('cuda')
+
         return outputs, alignments, dones, decoder_states
 
     def start_fresh_sequence(self):
