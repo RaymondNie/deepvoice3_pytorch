@@ -42,7 +42,6 @@ class Conv1d(nn.Conv1d):
             input = self.input_buffer
             if dilation > 1:
                 input = input[:, 0::dilation, :].contiguous()
-
         output = F.linear(input.view(bsz, -1), weight, self.bias)
         return output.view(bsz, 1, -1)
 

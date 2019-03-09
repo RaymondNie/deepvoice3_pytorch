@@ -42,7 +42,6 @@ def inv_spectrogram(spectrogram):
     y = processor.istft(D).astype(np.float32)
     return inv_preemphasis(y)
 
-
 def melspectrogram(y):
     D = _lws_processor().stft(preemphasis(y)).T
     S = _amp_to_db(_linear_to_mel(np.abs(D))) - hparams.ref_level_db

@@ -81,6 +81,7 @@ class MultiSpeakerTTSModel(nn.Module):
         # Reshape
         # (B, T, mel_dim)
         mel_outputs = mel_outputs.view(B, -1, self.mel_dim)
+
         # Prepare postnet inputs
         if self.use_decoder_state_for_postnet_input:
             postnet_inputs = decoder_states.view(B, mel_outputs.size(1), -1)
@@ -92,6 +93,7 @@ class MultiSpeakerTTSModel(nn.Module):
         # high resolution spectrogram
         linear_outputs = self.postnet(postnet_inputs, speaker_embed)
         assert linear_outputs.size(-1) == self.linear_dim
+        
         return mel_outputs, linear_outputs, alignments, done
 
 

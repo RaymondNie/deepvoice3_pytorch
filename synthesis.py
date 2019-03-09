@@ -13,8 +13,8 @@ options:
     --max-decoder-steps=<N>           Max decoder steps [default: 500].
     --replace_pronunciation_prob=<N>  Prob [default: 0.0].
     --speaker_id=<id>                 Speaker ID (for multi-speaker model).
-    --max_speaker_id=<max_id>         Will create audio samples for speaker ids from 0 to max_id
     --output-html                     Output html for blog post.
+    --epochs=<N>                      How many times to iterate through sentences
     -h, --help               Show help message.
 """
 from docopt import docopt
@@ -144,11 +144,13 @@ if __name__ == "__main__":
     replace_pronunciation_prob = float(args["--replace_pronunciation_prob"])
     output_html = args["--output-html"]
     speaker_id = args["--speaker_id"]
+    n_epochs = int(args["--epochs"])
+
+    # list of bad speakers
+    bad_speakers = [0,1,8,9,17,21,23,24,25,34,39,41,43,46,59,84,85,93,139,147,149,193,240,245,228]
+
     if speaker_id is not None:
         speaker_id = int(speaker_id)
-    max_speaker_id = args["--max_speaker_id"]
-    if max_speaker_id is not None:
-        max_speaker_id = int(max_speaker_id)
     preset = args["--preset"]
 
     # Load preset if specified
@@ -184,56 +186,87 @@ if __name__ == "__main__":
     os.makedirs(dst_dir, exist_ok=True)
     metadata = []
     batch = 0
-
+    epoch = 0
     dataset = InferDataset(text_list_file_path)
     data_loader = data_utils.DataLoader(dataset, batch_size=hparams.batch_size, collate_fn=collate_fn, shuffle=True, drop_last=True)
+    start = time.time()
 
-    for text_ids, text in data_loader:
-        # Generate data for a random speaker
-        speaker_id = random.randint(0, max_speaker_id)
-        start = time.time()
-        linear_outputs, alignments, dones = batch_tts(model, text_ids, 0, speaker_id)
-        for idx, linear_output in enumerate(linear_outputs):
-            stop_frame = 0
-            # Find when to cut off the audio based on stop token prediction
-            for done in dones:
-                if done[idx] > 0.5:
-                    break
-                stop_frame += 1
+    # for speaker_id in range(hparams.n_speakers):
+    #     for text_ids, text in data_loader:
+    #         linear_outputs, alignments, dones = batch_tts(model, text_ids, 0, speaker_id)
+    #         for idx, linear_output in enumerate(linear_outputs):
+    #             stop_frame = 0
+    #             for done in dones:
+    #                 if done[idx] > 0.9:
+    #                     break
+    #                 stop_frame += 1
+    #             linear_output = linear_output.cpu().data.numpy()
+    #             linear_output = linear_output[:stop_frame * hparams.downsample_step * hparams.outputs_per_step,:]
+    #             alignment = alignments[idx].cpu().data.numpy()
+    #             alignment = alignment[:stop_frame,:len(text[idx])]
 
-            linear_output = linear_output.cpu().data.numpy()
-            linear_output = linear_output[:stop_frame,:]
-            alignment = alignments[idx].cpu().data.numpy()
-            alignment = alignment[:stop_frame,:]
+    #             waveform = audio.inv_spectrogram(linear_output.T)
+    #             dst_wav_path = join(dst_dir, "speaker_id_{}_index_{}.wav".format(
+    #                 speaker_id, idx))
+    #             dst_alignment_path = join(
+    #                 dst_dir, "speaker_id_{}_index_{}_alignment.png".format(
+    #                 speaker_id, idx))
+    #             audio.save_wav(waveform, dst_wav_path)
+    #             plot_alignment(alignment.T, dst_alignment_path,
+    #                            info="{}, {}".format(hparams.builder, basename(checkpoint_path)))
 
-            # Filter out bad audio with alignment loss 
-            soft_max = guided_attention(
-                alignment.shape[0], 
-                alignment.shape[0],
-                alignment.shape[1],
-                alignment.shape[1],
-                0.2
-            )
-            attn_loss = (alignment * soft_max).mean()
-            if attn_loss > 0.001:
-                continue
+    while epoch < n_epochs:
+        for text_ids, text in data_loader:
+            # Generate data for a random speaker
+            speaker_id = random.randint(0, hparams.n_speakers)
+            while speaker_id in bad_speakers:
+                speaker_id = random.randint(0, hparams.n_speakers)
 
-            waveform = audio.inv_spectrogram(linear_output.T)
-            dst_wav_path = join(dst_dir, "batch{}_index{}_speaker_id_{}_checkpoint_{}.wav".format(
-                batch, idx, speaker_id, checkpoint_name))
-            dst_alignment_path = join(
-                dst_dir, "batch{}_index{}_speaker_id_{}_checkpoint_{}_alignment.png".format(
-                batch, idx, speaker_id, checkpoint_name))
-            audio.save_wav(waveform, dst_wav_path)
-            plot_alignment(alignment.T, dst_alignment_path,
-                           info="{}, {}".format(hparams.builder, basename(checkpoint_path)))
+            linear_outputs, alignments, dones = batch_tts(model, text_ids, 0, speaker_id)
+            for idx, linear_output in enumerate(linear_outputs):
+                stop_frame = 0
+                # Find when to cut off the audio based on stop token prediction
+                for done in dones:
+                    if done[idx] > 0.9:
+                        break
+                    stop_frame += 1
 
-            # Save metadata
-            metadata.append([dst_wav_path, text[idx]])
-        batch += 1
-        end = time.time()
-        print("Total duration: {}".format(end-start))
+                linear_output = linear_output.cpu().data.numpy()
+                linear_output = linear_output[:stop_frame * hparams.downsample_step * hparams.outputs_per_step,:]
+                alignment = alignments[idx].cpu().data.numpy()
+                alignment = alignment[:stop_frame,:len(text[idx])]
+
+                # Filter out bad audio with alignment loss 
+                soft_max = guided_attention(
+                    alignment.shape[0], 
+                    alignment.shape[0],
+                    alignment.shape[1],
+                    alignment.shape[1],
+                    0.2
+                )
+                attn_loss = (alignment * soft_max).mean()
+
+                if attn_loss > 0.00025:
+                    continue
+
+                waveform = audio.inv_spectrogram(linear_output.T)
+                dst_wav_path = join(dst_dir, "batch{}_index{}_speaker_id_{}_checkpoint_{}.wav".format(
+                    batch, idx, speaker_id, checkpoint_name))
+                dst_alignment_path = join(
+                    dst_dir, "batch{}_index{}_speaker_id_{}_checkpoint_{}_alignment.png".format(
+                    batch, idx, speaker_id, checkpoint_name))
+                audio.save_wav(waveform, dst_wav_path)
+                plot_alignment(alignment.T, dst_alignment_path,
+                               info="{}, {}".format(hparams.builder, basename(checkpoint_path)))
+
+                # Save metadata
+                metadata.append([dst_wav_path, text[idx]])
+            batch += 1
+        epoch += 1
+
+    end = time.time()
+    print("Total duration: {}".format(end-start))
         
     metadata_df = pd.DataFrame(metadata)
-    metadata_df.to_csv("{}/metadata.csv".format(dst_dir), encoding='utf-8', index=False, header=None)
+    metadata_df.to_csv("{}/metadata.csv".format(dst_dir), encoding='utf-8', index=False, header=["wav_filename", "transcript"])
     sys.exit(0)

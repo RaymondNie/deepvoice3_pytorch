@@ -3,7 +3,6 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import math
 import numpy as np
 
@@ -74,7 +73,6 @@ class Encoder(nn.Module):
     def forward(self, text_sequences, text_positions=None, lengths=None,
                 speaker_embed=None):
         total_length = text_sequences.size(1)
-
         assert self.n_speakers == 1 or speaker_embed is not None
         # embed text_sequences
         x = self.embed_tokens(text_sequences.long())
@@ -401,7 +399,6 @@ class Decoder(nn.Module):
         current_input = initial_input
 
         stop_frame = torch.zeros(B)
-
         while True:
             # frame pos start with 1.
             frame_pos = keys.data.new(B, 1).fill_(t + 1).long()
