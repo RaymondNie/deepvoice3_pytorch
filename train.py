@@ -591,13 +591,6 @@ def train(device, model, data_loader, optimizer, writer,
           clip_thresh=1.0,
           train_seq2seq=True, train_postnet=True, local_rank=0, distributed=False):
 
-    if distributed:
-        model.cuda()
-        model = DDP(model)
-    else:
-        model = nn.DataParallel(model)
-        model.to(device)
-
     linear_dim = model.module.linear_dim
     r = hparams.outputs_per_step
     downsample_step = hparams.downsample_step
@@ -858,6 +851,7 @@ def load_checkpoint(path, model, optimizer, reset_optimizer):
     print("Load checkpoint from: {}".format(path))
     checkpoint = _load(path)
     model.load_state_dict(checkpoint["state_dict"])
+
     if not reset_optimizer:
         optimizer_state = checkpoint["optimizer"]
         if optimizer_state is not None:
@@ -1023,8 +1017,9 @@ if __name__ == "__main__":
     
     # Model
     model = build_model()
+    model = nn.DataParallel(model).to(device)
 
-    optimizer = optim.Adam(model.get_trainable_parameters(),
+    optimizer = optim.Adam(model.module.get_trainable_parameters(),
                            lr=hparams.initial_learning_rate, betas=(
         hparams.adam_beta1, hparams.adam_beta2),
         eps=hparams.adam_eps, weight_decay=hparams.weight_decay,
