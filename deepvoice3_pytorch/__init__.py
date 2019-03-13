@@ -93,7 +93,7 @@ class MultiSpeakerTTSModel(nn.Module):
         # high resolution spectrogram
         linear_outputs = self.postnet(postnet_inputs, speaker_embed)
         assert linear_outputs.size(-1) == self.linear_dim
-
+        
         return mel_outputs, linear_outputs, alignments, done
 
 
