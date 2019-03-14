@@ -100,7 +100,7 @@ def tts(model, text, p=0, speaker_id=None, fast=False, batch_synthesis=False):
     # # Predicted audio signal
     waveform = audio.inv_spectrogram(linear_output.T)
     
-    return mag_signal, alignment, spectrogram, mel
+    return waveform, alignment, spectrogram, mel
 
 def batch_tts(model, text, p=0, speaker_id=None, fast=False, batch_synthesis=False):
     """Convert text to speech waveform given a deepvoice3 model.
