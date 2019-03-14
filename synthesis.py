@@ -51,7 +51,11 @@ class InferDataset(object):
         file.close()
     
     def __getitem__(self, idx):
-        return _frontend.text_to_sequence(self.dataset[idx][:-1], p=0), self.dataset[idx]
+        sequence = _frontend.text_to_sequence(self.dataset[idx][:-1], p=0), self.dataset[idx]
+        while len(sequence) >= hparams.max_positions:
+            idx = random.randint(0, len(self.dataset)-1)
+            sequence = _frontend.text_to_sequence(self.dataset[idx][:-1], p=0), self.dataset[idx]
+        return sequence
 
     def __len__(self):
         return len(self.dataset)
@@ -220,7 +224,7 @@ if __name__ == "__main__":
     while epoch < n_epochs:
         for text_ids, text in data_loader:
             # Generate data for a random speaker
-            speaker_id = random.randint(0, hparams.n_speakers)
+            speaker_id = random.randint(0, hparams.n_speakers-1)
             # while speaker_id in bad_speakers:
                 # speaker_id = random.randint(0, hparams.n_speakers)
 
