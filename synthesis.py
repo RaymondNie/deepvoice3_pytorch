@@ -101,19 +101,20 @@ def tts(model, text, p=0, speaker_id=None, fast=False, batch_synthesis=False):
     # waveform = audio.inv_spectrogram(linear_output.T)
     
     # Jasper conversions
-    linear_outputs = linear_outputs.data.cpu().numpy()
-    mel_outputs = mel_outputs.data.cpu().numpy()
+    linear_output = linear_outputs[0].data.cpu().numpy()
+    mel = mel_outputs[0].data.cpu().numpy()
+    spectrogram = audio._denormalize(linear_output)
 
-    linear_outputs = audio._denormalize(linear_outputs) + 20
-    mel_outputs = audio._denormalize(mel_outputs) + 20
+    linear_output = audio._denormalize(linear_output) + 20
+    # mel = audio._denormalize(mel) + 20
 
-    mel_to_mag = audio.jasper_inverse_mel(mel_outputs, 16000, 512, 64)
-    mag_to_mag = audio.jasper_get_mag_spec(linear_outputs)
+    # mel_to_mag = audio.jasper_inverse_mel(mel, 16000, 512, 64)
+    mag_to_mag = audio.jasper_get_mag_spec(linear_output)
 
-    mel_signal = audio.jasper_griffin_lim(mel_to_mag.T)
+    # mel_signal = audio.jasper_griffin_lim(mel_to_mag.T)
     mag_signal = audio.jasper_griffin_lim(mag_to_mag.T)
 
-    return mel_signal, mag_signal, alignment, spectrogram, mel
+    return mag_signal, alignment, spectrogram, mel
 
 def batch_tts(model, text, p=0, speaker_id=None, fast=False, batch_synthesis=False):
     """Convert text to speech waveform given a deepvoice3 model.
