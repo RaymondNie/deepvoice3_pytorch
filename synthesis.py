@@ -262,8 +262,8 @@ if __name__ == "__main__":
                     dst_dir, "batch{}_index{}_speaker_id_{}_checkpoint_{}_alignment.png".format(
                     batch, idx, speaker_id, checkpoint_name))
                 audio.save_wav(waveform, dst_wav_path)
-                plot_alignment(alignment.T, dst_alignment_path,
-                               info="{}, {}".format(hparams.builder, basename(checkpoint_path)))
+                # plot_alignment(alignment.T, dst_alignment_path,
+                #                info="{}, {}".format(hparams.builder, basename(checkpoint_path)))
 
                 # Save metadata
                 metadata.append([dst_wav_path, text[idx]])
