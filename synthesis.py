@@ -19,6 +19,7 @@ options:
 """
 from docopt import docopt
 from torch import nn
+import uuid
 
 import sys
 import os
@@ -256,15 +257,10 @@ if __name__ == "__main__":
                     continue
 
                 waveform = audio.inv_spectrogram(linear_output.T)
-                dst_wav_path = join(dst_dir, "batch{}_index{}_speaker_id_{}_checkpoint_{}.wav".format(
-                    batch, idx, speaker_id, checkpoint_name))
-                dst_alignment_path = join(
-                    dst_dir, "batch{}_index{}_speaker_id_{}_checkpoint_{}_alignment.png".format(
-                    batch, idx, speaker_id, checkpoint_name))
+                unique_filename = str(uuid.uuid4())
+                dst_wav_path = join(dst_dir, "speaker_id_{}_{}_{}.wav".format(
+                    speaker_id, checkpoint_name, unique_filename))
                 audio.save_wav(waveform, dst_wav_path)
-                # plot_alignment(alignment.T, dst_alignment_path,
-                #                info="{}, {}".format(hparams.builder, basename(checkpoint_path)))
-
                 # Save metadata
                 metadata.append([dst_wav_path, text[idx]])
             metadata_df = pd.DataFrame(metadata)
