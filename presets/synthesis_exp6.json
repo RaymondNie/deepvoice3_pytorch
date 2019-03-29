@@ -59,7 +59,7 @@
   "eval_interval": 5000,
   "save_optimizer_state": true,
   "force_monotonic_attention": true,
-  "window_ahead": 3,
+  "window_ahead": 5,
   "window_backward": 0,
   "power": 1.4
 }
